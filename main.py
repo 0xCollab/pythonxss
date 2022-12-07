@@ -1,42 +1,65 @@
 import requests
-import sys
 import urllib.parse
-from bs4 import BeautifulSoup
 
+def check_xss():
+  # Prompt the user for the URL, request method, and parameter
+  url = input("Enter the URL to check: ")
+  method = input("Enter the request method (GET or POST): ")
+  param = input("Enter the parameter to check: ")
 
-# def validurl(str):
-#    #r = requests.get(url)
-#    if r.status_code == 200:
-#        return url
-#    else:
-#        return exit(0)
+  # Parse the URL and validate it
+  parsed_url = urllib.parse.urlparse(url)
 
-# def fileopen(str):
-#    f1 = open("payload.txt","r+")
-#    for i in f1:
-#        return i
+  # Prompt the user for authentication credentials, if needed
+  username = input("Enter username (leave blank if not needed): ")
+  password = input("Enter password (leave blank if not needed): ")
+  if username and password:
+    auth = (username, password)
+  else:
+    auth = None
 
-def sendget(str):
-    f1 = open('payload.txt').readlines()
-    #    print (f1)
-    for line in f1:
-        #        payload = line
-        #       print(payload)
-        params = {'query': line}
-        value = urllib.parse.urlencode(params)
-        req = requests.get(str, params=params)
-        #        print(req.url)
-        #        print(req.headers)
-        #        print(req.content)
-        print(value)
-        soup = BeautifulSoup(req.text)
-        for value in doc.find_all(text=req.compile(), limit=2):
-            print(value)
-#        print(req.content)
+  # Set the timeout for the requests
+  timeout = 10
 
-print("enter URL for scanning in https://yoururl.com format")
-url = input()
-if len(url) == 0:
-    print("no url to scan")
-else:
-    sendget(url)
+  # Read the payload file
+  with open("payload.txt") as f:
+    payloads = f.read().splitlines()
+
+  # Check if the URL is reachable
+  try:
+    requests.head(url, timeout=timeout)
+  except requests.ConnectionError:
+    print("Error: Could not connect to the specified URL.")
+    return
+
+  # Send a request to the URL without the payload
+  if method == "GET":
+    response = requests.get(url, auth=auth, timeout=timeout)
+  elif method == "POST":
+    response = requests.post(url, auth=auth, timeout=timeout)
+  else:
+    raise ValueError("Invalid request method: must be GET or POST")
+
+  # Check if the parameter is present in the response
+  if param not in response.text:
+    print("The specified parameter was not found in the response.")
+  else:
+    # Loop through the payloads
+    for payload in payloads:
+      # Encode the payload for use in the request
+      encoded_payload = urllib.parse.quote(payload)
+
+      # Send the request to the URL with the payload in the specified parameter
+      if method == "GET":
+        response = requests.get(url, params={param: encoded_payload}, auth=auth, timeout=timeout)
+      elif method == "POST":
+        data = {param: encoded_payload}
+        response = requests.post(url, data=data, auth=auth, timeout=timeout)
+
+      # Check the response for the payload
+      if payload in response.text:
+        print("Possible XSS vulnerability found with payload: {}".format(payload))
+        break
+
+# Test the function
+check_xss()
